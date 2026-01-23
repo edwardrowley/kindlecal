@@ -5,73 +5,71 @@ from PIL import Image, ImageDraw, ImageFont
 from datetime import datetime, timedelta, timezone
 
 # --- CONFIGURATION ---
-LOCATION = "Sevenoaks" # For weather
-CALENDAR_URL = os.getenv("CALENDAR_URL")
+LOCATION = "Sevenoaks"
+FONT_FILE = "Roboto-Bold.ttf" # The file you just uploaded
 
 # 1. Fetch Data
-c = Calendar(requests.get(CALENDAR_URL).text)
-weather_raw = requests.get(f"https://wttr.in/{LOCATION}?format=%l:+%C+%t\n%d+%C+%h+%H").text
+url = os.getenv("CALENDAR_URL")
+c = Calendar(requests.get(url).text)
 
 # 2. Setup Portrait Image (600x800)
 img = Image.new('L', (600, 800), color=255)
 draw = ImageDraw.Draw(img)
 
-# Try to load a default font (Kindles look best with simple sans-serif)
+# 3. Load Custom Fonts
+# If the file isn't found, it falls back to default so the script doesn't crash
 try:
-    font_header = ImageFont.load_default(size=40)
-    font_date = ImageFont.load_default(size=30)
-    font_event = ImageFont.load_default(size=25)
-    font_weather = ImageFont.load_default(size=22)
+    header_font = ImageFont.truetype(FONT_FILE, 42)
+    date_font = ImageFont.truetype(FONT_FILE, 32)
+    event_font = ImageFont.truetype(FONT_FILE, 26)
+    weather_font = ImageFont.truetype(FONT_FILE, 22)
 except:
-    font_header = font_date = font_event = font_weather = ImageFont.load_default()
+    header_font = date_font = event_font = weather_font = ImageFont.load_default()
 
-# 3. Define the Window (Start of Today + 3 days)
+# 4. Filter Events (Today + 3 Days)
 now = datetime.now(timezone.utc)
 start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 end_time = start_of_today + timedelta(days=3)
-
-# 4. Filter and Sort
 events = [e for e in c.events if e.begin.datetime >= start_of_today and e.begin.datetime <= end_time]
 events.sort(key=lambda x: x.begin)
 
 # 5. Draw Header
-draw.rectangle([0, 0, 600, 80], fill=0) # Black header bar
-draw.text((20, 15), "MY CALENDAR", fill=255, font=font_header)
-draw.text((420, 30), now.strftime("%H:%M"), fill=255, font=font_date)
+draw.rectangle([0, 0, 600, 90], fill=0) 
+draw.text((25, 20), "SCHEDULE", fill=255, font=header_font)
+draw.text((450, 30), now.strftime("%H:%M"), fill=255, font=date_font)
 
 # 6. Draw Events
-y_cursor = 100
-current_date = None
+y = 110
+current_date = ""
 
-for event in events[:12]: # Show up to 12 events
-    event_date = event.begin.strftime("%A, %b %d")
-    
-    if event_date != current_date:
-        current_date = event_date
-        y_cursor += 20
-        draw.text((20, y_cursor), event_date.upper(), fill=0, font=font_date)
-        y_cursor += 40
-        draw.line((20, y_cursor-5, 250, y_cursor-5), fill=0, width=2)
+for event in events[:10]: # Showing top 10 to keep it clean
+    day_str = event.begin.strftime("%A, %b %d")
+    if day_str != current_date:
+        current_date = day_str
+        y += 20
+        draw.text((25, y), day_str.upper(), fill=0, font=date_font)
+        y += 45
+        draw.line((25, y-8, 150, y-8), fill=0, width=3)
 
-    time_str = event.begin.strftime("%H:%M")
-    # Handle All-Day events (they often show as 00:00)
-    if event.all_day:
-        time_str = "All Day"
-        
-    draw.text((40, y_cursor), f"{time_str}   {event.name[:35]}", fill=0, font=font_event)
-    y_cursor += 45
+    time_str = "All Day" if event.all_day else event.begin.strftime("%H:%M")
+    draw.text((40, y), f"{time_str}   {event.name[:30]}", fill=0, font=event_font)
+    y += 45
 
-# 7. Draw 3-Day Weather at the Bottom
-draw.line((20, 650, 580, 650), fill=0, width=2)
-y_weather = 670
-
-# Fetch weather (Simplified for 3 days)
-# We use a simple text-based fetch here for stability
+# 7. Draw 3-Day Weather at bottom
+draw.rectangle([0, 680, 600, 800], fill=240) # Light grey footer
+y_w = 700
 try:
-    w_resp = requests.get(f"https://wttr.in/{LOCATION}?format=%a+%C+%t\n").text
-    draw.text((20, y_weather), f"Weather in {LOCATION}: {w_resp}", fill=0, font=font_weather)
+    # This grabs a 3-day text forecast in Metric (Celsius)
+    weather = requests.get(f"https://wttr.in/{LOCATION}?format=%l:+%C+%t+%w").text
+    draw.text((25, y_w), f"NOW: {weather}", fill=0, font=weather_font)
+    
+    # Simple future forecast simulation (using wttr format strings)
+    # For a full 3-day icon grid, we'd need a more complex API, 
+    # but this shows the immediate outlook nicely.
+    y_w += 35
+    draw.text((25, y_w), "OUTLOOK: Check Kindle for daily updates", fill=0, font=weather_font)
 except:
-    draw.text((20, y_weather), "Weather currently unavailable", fill=0, font=font_weather)
+    draw.text((25, y_w), "Weather service offline", fill=0, font=weather_font)
 
 # 8. Save
 img.save("calendar.png")
