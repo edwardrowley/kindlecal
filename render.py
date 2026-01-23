@@ -8,24 +8,41 @@ from datetime import datetime, timedelta
 url = os.getenv("CALENDAR_URL")
 c = Calendar(requests.get(url).text)
 
-# 2. Setup Image (800x600 is standard Kindle resolution)
-img = Image.new('L', (800, 600), color=255) # 'L' is grayscale
+# 2. Setup Image (600x800 for Portrait)
+# Changed from (800, 600) to (600, 800)
+img = Image.new('L', (600, 800), color=255) 
 draw = ImageDraw.Draw(img)
 
-# 3. Simple Drawing Logic
-y_cursor = 50
-draw.text((50, 20), f"Updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}", fill=0)
-draw.line((50, 45, 750, 45), fill=0)
+# 3. Define the Window (Today + next 3 days)
+start_time = datetime.now()
+end_time = start_time + timedelta(days=3)
 
-# Filter for today's events
-today = datetime.now().date()
-events = [e for e in c.events if e.begin.date() == today]
+# 4. Filter and Sort Events
+events = [e for e in c.events if e.begin.datetime >= start_time and e.begin.datetime <= end_time]
 events.sort(key=lambda x: x.begin)
 
-for event in events[:10]: # Limit to 10 events
-    time_str = event.begin.strftime("%H:%M")
-    draw.text((50, y_cursor), f"[{time_str}] {event.name}", fill=0)
-    y_cursor += 40
+# 5. Drawing Logic (Adjusted X-coordinates for 600px width)
+y_cursor = 60
+draw.text((30, 20), f"Kindle Calendar | Updated: {start_time.strftime('%H:%M')}", fill=0)
+draw.line((30, 45, 570, 45), fill=0) # Shortened line for 600px width
 
-# 4. Save
+current_date = None
+
+for event in events[:18]: # Can fit more events in portrait!
+    event_date = event.begin.strftime("%A, %b %d")
+    
+    # If it's a new day, print a header
+    if event_date != current_date:
+        current_date = event_date
+        y_cursor += 15
+        draw.text((30, y_cursor), event_date.upper(), fill=0)
+        y_cursor += 25
+        draw.line((30, y_cursor-5, 180, y_cursor-5), fill=0)
+
+    # Print the event (adjusted indent)
+    time_str = event.begin.strftime("%H:%M")
+    draw.text((45, y_cursor), f"{time_str} - {event.name}", fill=0)
+    y_cursor += 35
+
+# 6. Save
 img.save("calendar.png")
