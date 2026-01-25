@@ -95,4 +95,14 @@ try:
 except:
     draw.text((30, 700), "Weather error", fill=0, font=weather_font)
 
+
+# --- ADD TIMESTAMP TO BOTTOM RIGHT ---
+# Generate the string (e.g., "Updated: 15:17")
+timestamp_str = f"Updated: {now.strftime('%H:%M')}"
+
+# Use your weather_font or a smaller one if you have it
+# (430, 750) is a safe spot for the bottom right on a 600x800 screen
+draw.text((430, 750), timestamp_str, fill=0, font=weather_font)
+# --- end timestamp ---
+
 img.save("calendar.png")
