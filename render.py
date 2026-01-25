@@ -10,6 +10,24 @@ LOCATION = "Sevenoaks"
 FONT_FILE = "Roboto-Bold.ttf"
 CALENDAR_URL = os.getenv("CALENDAR_URL")
 
+# --- MOON PHASE LOGIC ---
+def get_moon_phase():
+    # Reference: New Moon on Jan 6, 2000
+    diff = datetime.now(timezone.utc) - datetime(2000, 1, 6, 18, 14, tzinfo=timezone.utc)
+    lunar_cycle = 29.530588853
+    age = (diff.days + diff.seconds / 86400) % lunar_cycle
+    percent = age / lunar_cycle
+
+    # High-contrast symbols for Kindle E-ink
+    if percent < 0.06 or percent > 0.94: return "🌑 NEW"
+    if percent < 0.19: return "🌒 WX-CRES"
+    if percent < 0.31: return "🌓 1ST-QTR"
+    if percent < 0.44: return "🌔 WX-GIB"
+    if percent < 0.56: return "🌕 FULL"
+    if percent < 0.69: return "🌖 WN-GIB"
+    if percent < 0.81: return "🌗 3RD-QTR"
+    return "🌘 WN-CRES"
+
 # 1. Fetch and "Unfold" Recurring Events
 raw_data = requests.get(CALENDAR_URL).text
 ical_data = icalendar.Calendar.from_ical(raw_data)
@@ -19,7 +37,7 @@ now = datetime.now(timezone.utc)
 start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 end_time = start_of_today + timedelta(days=3)
 
-# 3. Get all occurrences (including the recurring ones!)
+# 3. Get all occurrences
 events = recurring_ical_events.of(ical_data).between(start_of_today, end_time)
 events.sort(key=lambda x: x.get('DTSTART').dt if hasattr(x.get('DTSTART').dt, 'hour') else datetime.combine(x.get('DTSTART').dt, datetime.min.time()).replace(tzinfo=timezone.utc))
 
@@ -31,8 +49,14 @@ try:
     date_font = ImageFont.truetype(FONT_FILE, 38)
     event_font = ImageFont.truetype(FONT_FILE, 28)
     weather_font = ImageFont.truetype(FONT_FILE, 24)
+    moon_font = ImageFont.truetype(FONT_FILE, 20) # Slightly smaller for the corner
 except:
-    date_font = event_font = weather_font = ImageFont.load_default()
+    date_font = event_font = weather_font = moon_font = ImageFont.load_default()
+
+# --- DRAW MOON PHASE (Top Right) ---
+moon_status = get_moon_phase()
+# Placing it at x=440 (leaves space for text) and y=20
+draw.text((440, 20), moon_status, fill=0, font=moon_font)
 
 # 5. Draw Events
 y = 40
@@ -41,7 +65,6 @@ current_date = ""
 for event in events[:12]:
     start = event.get('DTSTART').dt
     
-    # Handle Date vs Datetime (All day events vs timed)
     if not isinstance(start, datetime):
         start = datetime.combine(start, datetime.min.time()).replace(tzinfo=timezone.utc)
     elif start.tzinfo is None:
@@ -55,7 +78,6 @@ for event in events[:12]:
         y += 50
         draw.line((30, y-10, 220, y-10), fill=0, width=3)
 
-    # Time formatting
     is_all_day = not hasattr(event.get('DTSTART').dt, 'hour')
     time_str = "All Day" if is_all_day else start.strftime("%H:%M")
     
@@ -68,7 +90,7 @@ for event in events[:12]:
 # 6. Draw Weather Footer
 draw.line((30, 680, 570, 680), fill=0, width=2)
 try:
-    w_data = requests.get(f"https://wttr.in/{LOCATION}?format=%C+%t+%m&m").text
+    w_data = requests.get(f"https://wttr.in/{LOCATION}?format=%C+%t&m").text
     draw.text((30, 700), f"Sevenoaks: {w_data}", fill=0, font=weather_font)
 except:
     draw.text((30, 700), "Weather error", fill=0, font=weather_font)
